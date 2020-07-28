@@ -54,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     //использование физичесского геймпада
     static boolean useJoyStick = true;
 
+    boolean sent = false;
     //переменные общения с дроном
     int throttle = 127;
     int yaw = 127;
@@ -120,7 +121,7 @@ public class MainActivity extends AppCompatActivity {
     private void createWebSocketClient() {
         URI uri;
         try {
-            uri = new URI("ws://"+ip[0]+"."+ip[1]+"."+ip[2]+"."+ip[3]+":"+port+"/");// ip - адресс и порт для подключения
+            uri = new URI("ws://"+ip[0]+"."+ip[1]+"."+ip[2]+"."+ip[3]+":"+port);// ip - адресс и порт для подключения
         }
         catch (URISyntaxException e) {
             e.printStackTrace();
@@ -177,6 +178,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onCloseReceived() {
                 isConnected = false;
+                webSocketClient.close();
                 info_text = "Connection lost";
             }
         };
@@ -202,22 +204,12 @@ public class MainActivity extends AppCompatActivity {
         //формулы перевода значений угла и расстояния от центра в тангаж, крен...
         throttle = (int)Math.floor(127-127*distance*Math.cos(degrees));
         yaw = (int)Math.floor(127+127*distance*Math.sin(degrees));
-
-        if(webSocketClient != null) {
-            webSocketClient.send(toByteArray(yaw, throttle, pitch, roll, mode));
-            info_text2 = yaw + " " + throttle + " " + pitch + " " + roll + " " + mode;
-        }
     }
     //изменение правого джойстика
     void onDirectionChanged_right(double degrees, double distance){
         //формулы перевода значений угла и расстояния от центра в тангаж, крен...
         pitch  = (int)Math.floor(127-127*distance*Math.cos(degrees));
         roll  = (int)Math.floor(127+127*distance*Math.sin(degrees));
-
-        if(webSocketClient!= null) {
-            webSocketClient.send(toByteArray(yaw, throttle, pitch, roll, mode));
-            info_text2 = yaw + " " + throttle + " " + pitch + " " + roll + " " + mode;
-        }
     }
 
     //по протоколу общения первый бит команды - всегда 0xFF
@@ -277,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
                         joyStickR.move(e.getX(joyStickR.id), e.getY(joyStickR.id));
                         joyStickL.move(e.getX(joyStickL.id), e.getY(joyStickL.id));
                     }
-
+                    sent = true;
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_POINTER_UP:
@@ -285,9 +277,11 @@ public class MainActivity extends AppCompatActivity {
                     if (joyStickR != null && pointerID == joyStickR.id) {
                         joyStickR.delete();
                         joyStickR = null;
+                        onDirectionChanged_right(0,0);
                     } else {
                         joyStickL.delete();
                         joyStickL = null;
+                        onDirectionChanged_left(0,0);
                     }
                     break;
             }
@@ -398,6 +392,11 @@ public class MainActivity extends AppCompatActivity {
             //info.setVisibility(View.INVISIBLE);
            // info2.setVisibility(View.INVISIBLE);
         }
+        if(webSocketClient != null && sent) {
+            webSocketClient.send(toByteArray(yaw, throttle, pitch, roll, mode));
+            info_text2 = yaw + " " + throttle + " " + pitch + " " + roll + " " + mode;
+            sent = false;
+        }
     }
 
     public void onSettings(View view) {
@@ -415,5 +414,11 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onFinish() {
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        webSocketClient.close();
     }
 }
